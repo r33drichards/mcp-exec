@@ -1,6 +1,6 @@
 { pkgs, self }:
 
-pkgs.nixosTest {
+pkgs.testers.nixosTest {
   name = "mcp-exec-multi-machine";
 
   nodes.server = { config, pkgs, ... }: {
