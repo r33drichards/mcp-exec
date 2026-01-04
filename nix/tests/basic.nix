@@ -1,5 +1,19 @@
 { pkgs, self }:
 
+let
+  # Python environment with MCP SDK
+  pythonEnv = pkgs.python3.withPackages (ps: [
+    ps.mcp
+    ps.httpx
+    ps.httpx-sse
+  ]);
+
+  # Test client script
+  testClient = pkgs.writeScript "mcp-test-client" ''
+    #!${pythonEnv}/bin/python3
+    ${builtins.readFile ./mcp_test_client.py}
+  '';
+in
 pkgs.testers.nixosTest {
   name = "mcp-exec-basic";
 
@@ -10,6 +24,8 @@ pkgs.testers.nixosTest {
       enable = true;
       port = 19222;
     };
+
+    environment.systemPackages = [ pythonEnv ];
   };
 
   testScript = ''
@@ -19,27 +35,7 @@ pkgs.testers.nixosTest {
     server.wait_for_unit("mcp-exec.service")
     server.wait_for_open_port(19222)
 
-    # Test MCP protocol - initialize
-    result = server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/ \
-        -H 'Content-Type: application/json' \
-        -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
-    """)
-    assert "result" in result or "capabilities" in result, f"Initialize failed: {result}"
-
-    # Send initialized notification and call exec
-    server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/ \
-        -H 'Content-Type: application/json' \
-        -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
-    """)
-
-    # Execute echo command
-    exec_result = server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/ \
-        -H 'Content-Type: application/json' \
-        -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"exec","arguments":{"cmd":"echo hello_nixos_test","timeout":10}}}'
-    """)
-    assert "id" in exec_result, f"Exec should return execution id: {exec_result}"
+    # Run MCP test client
+    server.succeed("${testClient} --url http://127.0.0.1:19222/")
   '';
 }
