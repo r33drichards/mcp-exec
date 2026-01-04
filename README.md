@@ -59,6 +59,123 @@ mcp-exec --http-port 8080 --directory-path /var/lib/mcp-exec
 mcp-exec --http-port 8080 --bind-address 0.0.0.0 --directory-path /var/lib/mcp-exec
 ```
 
+## Client Integration
+
+### Claude for Desktop
+
+1. Install mcp-exec using Cargo or Nix (see [Installation](#installation)).
+2. Open Claude Desktop → Settings → Developer → Edit Config.
+3. Add the server to `claude_desktop_config.json`:
+
+**With file-based storage (recommended):**
+```json
+{
+  "mcpServers": {
+    "exec": {
+      "command": "mcp-exec",
+      "args": ["--directory-path", "/tmp/mcp-exec-logs"]
+    }
+  }
+}
+```
+
+**With in-memory storage:**
+```json
+{
+  "mcpServers": {
+    "exec": {
+      "command": "mcp-exec"
+    }
+  }
+}
+```
+
+4. Restart Claude Desktop. The exec tools will appear under the hammer icon.
+
+### Cursor
+
+1. Install mcp-exec using Cargo or Nix.
+2. Create or edit `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "exec": {
+      "command": "mcp-exec",
+      "args": ["--directory-path", "/tmp/mcp-exec-logs"]
+    }
+  }
+}
+```
+
+3. Restart Cursor. The MCP tools will be available in the UI.
+
+### Claude Code CLI
+
+**For local stdio transport:**
+```bash
+claude mcp add exec -- mcp-exec --directory-path /tmp/mcp-exec-logs
+```
+
+**For remote HTTP server:**
+```bash
+# If mcp-exec is running on a remote server with HTTP transport
+claude mcp add exec -t http http://your-server:8080/mcp
+```
+
+Then test by running `claude` and asking: "Execute `echo hello world`"
+
+### Windsurf
+
+1. Install mcp-exec using Cargo or Nix.
+2. Open Windsurf → Settings → MCP Servers.
+3. Add a new server configuration:
+
+```json
+{
+  "mcpServers": {
+    "exec": {
+      "command": "mcp-exec",
+      "args": ["--directory-path", "/tmp/mcp-exec-logs"]
+    }
+  }
+}
+```
+
+4. Restart Windsurf to apply changes.
+
+### Zed
+
+1. Install mcp-exec using Cargo or Nix.
+2. Edit your Zed settings (`~/.config/zed/settings.json`):
+
+```json
+{
+  "context_servers": {
+    "exec": {
+      "command": {
+        "path": "mcp-exec",
+        "args": ["--directory-path", "/tmp/mcp-exec-logs"]
+      }
+    }
+  }
+}
+```
+
+3. Restart Zed to enable the MCP server.
+
+### Generic MCP Client (HTTP)
+
+For any MCP client that supports HTTP transport, start the server and connect:
+
+```bash
+# Start the server
+mcp-exec --http-port 8080 --directory-path /var/lib/mcp-exec
+
+# Connect using the streamable HTTP endpoint
+# URL: http://localhost:8080/mcp
+```
+
 ## NixOS Module
 
 The flake provides a NixOS module for running mcp-exec as a system service.
