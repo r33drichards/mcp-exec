@@ -39,11 +39,19 @@ impl LogStore for FileLogStore {
         let status_path = self.status_path(id);
         let meta_path = self.meta_path(id);
 
-        if log_path.exists() {
-            return Err(format!("Execution {} already exists", id));
-        }
+        // Atomically create log file, fails if already exists
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&log_path)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    format!("Execution {} already exists", id)
+                } else {
+                    e.to_string()
+                }
+            })?;
 
-        std::fs::File::create(&log_path).map_err(|e| e.to_string())?;
         std::fs::write(&meta_path, &cmd).map_err(|e| e.to_string())?;
 
         let status = serde_json::to_string(&ExecutionStatus::Running)
