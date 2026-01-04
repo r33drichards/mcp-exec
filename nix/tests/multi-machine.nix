@@ -40,7 +40,7 @@ pkgs.testers.nixosTest {
 
     # Test MCP protocol from client
     init_result = client.succeed("""
-      curl -sf -X POST http://server:19222/mcp/v1 \
+      curl -sf -X POST http://server:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"remote-client","version":"1.0"}}}'
     """)
@@ -48,14 +48,14 @@ pkgs.testers.nixosTest {
 
     # Send initialized notification
     client.succeed("""
-      curl -sf -X POST http://server:19222/mcp/v1 \
+      curl -sf -X POST http://server:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     """)
 
     # Execute command from client
     exec_result = client.succeed("""
-      curl -sf -X POST http://server:19222/mcp/v1 \
+      curl -sf -X POST http://server:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"exec","arguments":{"cmd":"hostname","timeout":10}}}'
     """)
@@ -76,7 +76,7 @@ pkgs.testers.nixosTest {
 
     if exec_id:
         stream_result = client.succeed(f"""
-          curl -sf -X POST http://server:19222/mcp/v1 \
+          curl -sf -X POST http://server:19222/mcp \
             -H 'Content-Type: application/json' \
             -d '{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"stream_logs","arguments":{{"id":"{exec_id}","offset":0}}}}}}'
         """)

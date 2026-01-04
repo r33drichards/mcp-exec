@@ -35,7 +35,7 @@ pkgs.testers.nixosTest {
         if params:
             payload["params"] = params
         return server.succeed(f"""
-          curl -sf -X POST http://127.0.0.1:19222/mcp/v1 \
+          curl -sf -X POST http://127.0.0.1:19222/mcp \
             -H 'Content-Type: application/json' \
             -d '{json.dumps(payload)}'
         """)
@@ -50,7 +50,7 @@ pkgs.testers.nixosTest {
 
     # Send initialized notification
     server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/mcp/v1 \
+      curl -sf -X POST http://127.0.0.1:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     """)
@@ -111,7 +111,7 @@ pkgs.testers.nixosTest {
         "clientInfo": {"name": "test", "version": "1.0"}
     }, id=10)
     server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/mcp/v1 \
+      curl -sf -X POST http://127.0.0.1:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     """)

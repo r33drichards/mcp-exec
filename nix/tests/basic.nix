@@ -24,7 +24,7 @@ pkgs.testers.nixosTest {
 
     # Execute a simple command via MCP protocol
     result = server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/mcp/v1 \
+      curl -sf -X POST http://127.0.0.1:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
     """)
@@ -32,14 +32,14 @@ pkgs.testers.nixosTest {
 
     # Send initialized notification and call exec
     server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/mcp/v1 \
+      curl -sf -X POST http://127.0.0.1:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","method":"notifications/initialized"}'
     """)
 
     # Execute echo command
     exec_result = server.succeed("""
-      curl -sf -X POST http://127.0.0.1:19222/mcp/v1 \
+      curl -sf -X POST http://127.0.0.1:19222/mcp \
         -H 'Content-Type: application/json' \
         -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"exec","arguments":{"cmd":"echo hello_nixos_test","timeout":10}}}'
     """)
