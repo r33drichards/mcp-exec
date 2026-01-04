@@ -7,6 +7,78 @@ let
     ps.httpx
     ps.httpx-sse
   ]);
+
+  # Test script for full functionality
+  testScript = pkgs.writeScript "mcp-full-test.py" ''
+    #!${pythonEnv}/bin/python3
+    import asyncio
+    import json
+    import sys
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    async def test():
+        async with streamablehttp_client("http://127.0.0.1:19222/") as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                print("OK: initialize", file=sys.stderr)
+
+                # Execute command
+                result = await session.call_tool("exec", {
+                    "cmd": "echo 'persistence_test_12345'",
+                    "timeout": 10
+                })
+                exec_data = json.loads(result.content[0].text)
+                exec_id = exec_data["id"]
+                print(f"OK: exec id={exec_id}", file=sys.stderr)
+
+                await asyncio.sleep(1)
+
+                # Stream logs
+                result = await session.call_tool("stream_logs", {
+                    "id": exec_id,
+                    "offset": 0
+                })
+                logs = result.content[0].text
+                assert "persistence_test_12345" in logs, f"Output not found: {logs}"
+                print("OK: stream_logs", file=sys.stderr)
+
+                # Search logs
+                result = await session.call_tool("search_logs", {
+                    "id": exec_id,
+                    "pattern": "persistence.*12345"
+                })
+                print("OK: search_logs", file=sys.stderr)
+
+                # Test sudo command
+                result = await session.call_tool("exec", {
+                    "cmd": "sudo cat /etc/shadow | head -1",
+                    "timeout": 10
+                })
+                sudo_data = json.loads(result.content[0].text)
+                print(f"OK: sudo exec id={sudo_data['id']}", file=sys.stderr)
+
+                print("All tests passed!")
+                return exec_id
+
+    asyncio.run(test())
+  '';
+
+  # Restart test script
+  restartScript = pkgs.writeScript "mcp-restart-test.py" ''
+    #!${pythonEnv}/bin/python3
+    import asyncio
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    async def test():
+        async with streamablehttp_client("http://127.0.0.1:19222/") as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                print("OK: reconnect after restart")
+
+    asyncio.run(test())
+  '';
 in
 pkgs.testers.nixosTest {
   name = "mcp-exec-full";
@@ -36,60 +108,7 @@ pkgs.testers.nixosTest {
     server.wait_for_open_port(19222)
 
     # Test using Python MCP client
-    test_script = """
-import asyncio
-import json
-import sys
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
-
-async def test():
-    async with streamablehttp_client("http://127.0.0.1:19222/") as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            print("OK: initialize", file=sys.stderr)
-
-            # Execute command
-            result = await session.call_tool("exec", {
-                "cmd": "echo 'persistence_test_12345'",
-                "timeout": 10
-            })
-            exec_data = json.loads(result.content[0].text)
-            exec_id = exec_data["id"]
-            print(f"OK: exec id={exec_id}", file=sys.stderr)
-
-            await asyncio.sleep(1)
-
-            # Stream logs
-            result = await session.call_tool("stream_logs", {
-                "id": exec_id,
-                "offset": 0
-            })
-            logs = result.content[0].text
-            assert "persistence_test_12345" in logs, f"Output not found: {logs}"
-            print("OK: stream_logs", file=sys.stderr)
-
-            # Search logs
-            result = await session.call_tool("search_logs", {
-                "id": exec_id,
-                "pattern": "persistence.*12345"
-            })
-            print("OK: search_logs", file=sys.stderr)
-
-            # Test sudo command
-            result = await session.call_tool("exec", {
-                "cmd": "sudo cat /etc/shadow | head -1",
-                "timeout": 10
-            })
-            sudo_data = json.loads(result.content[0].text)
-            print(f"OK: sudo exec id={sudo_data['id']}", file=sys.stderr)
-
-            print("All tests passed!")
-            return exec_id
-
-asyncio.run(test())
-"""
-    server.succeed(f'${pythonEnv}/bin/python3 -c "{test_script}"')
+    server.succeed("${testScript}")
 
     # Verify log files exist on disk
     server.succeed("ls -la /var/lib/mcp-exec/")
@@ -101,19 +120,6 @@ asyncio.run(test())
     server.wait_for_open_port(19222)
 
     # Verify logs persist after restart (basic connectivity test)
-    restart_script = """
-import asyncio
-from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
-
-async def test():
-    async with streamablehttp_client("http://127.0.0.1:19222/") as (read, write, _):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            print("OK: reconnect after restart")
-
-asyncio.run(test())
-"""
-    server.succeed(f'${pythonEnv}/bin/python3 -c "{restart_script}"')
+    server.succeed("${restartScript}")
   '';
 }
