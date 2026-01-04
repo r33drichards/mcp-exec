@@ -73,8 +73,6 @@ pkgs.testers.nixosTest {
   };
 
   testScript = ''
-    import time
-
     start_all()
 
     # Wait for server to be ready

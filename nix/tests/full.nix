@@ -100,8 +100,6 @@ pkgs.testers.nixosTest {
   };
 
   testScript = ''
-    import json
-
     start_all()
 
     server.wait_for_unit("mcp-exec.service")
