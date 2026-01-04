@@ -88,7 +88,7 @@ in
       wantedBy = [ "multi-user.target" ];
       after = [ "network.target" ];
 
-      path = [ pkgs.coreutils pkgs.bash ];
+      path = [ pkgs.coreutils pkgs.bash pkgs.inetutils ];
       serviceConfig = {
         Type = "simple";
         User = cfg.user;
