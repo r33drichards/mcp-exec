@@ -95,6 +95,7 @@ in
         ExecStart = lib.concatStringsSep " " ([
           "${cfg.package}/bin/mcp-exec"
           "--http-port" (toString cfg.port)
+          "--bind-address" cfg.bindAddress
           "--directory-path" cfg.directoryPath
         ] ++ cfg.extraArgs);
         Restart = "on-failure";

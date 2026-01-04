@@ -31,6 +31,10 @@ struct Cli {
     /// HTTP port to listen on using streamable HTTP transport (if not specified, uses stdio transport)
     #[arg(long)]
     http_port: Option<u16>,
+
+    /// Address to bind the HTTP server to (default: 127.0.0.1)
+    #[arg(long, default_value = "127.0.0.1")]
+    bind_address: String,
 }
 
 #[tokio::main]
@@ -55,8 +59,8 @@ async fn main() -> Result<()> {
     };
 
     if let Some(port) = cli.http_port {
-        tracing::info!("Starting streamable HTTP transport on port {}", port);
-        start_http_server(store, port).await?;
+        tracing::info!("Starting streamable HTTP transport on {}:{}", cli.bind_address, port);
+        start_http_server(store, &cli.bind_address, port).await?;
     } else {
         tracing::info!("Starting stdio transport");
         let service = ExecService::new(store).serve(stdio()).await?;
@@ -66,8 +70,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn start_http_server(store: AnyLogStore, port: u16) -> Result<()> {
-    let addr = format!("127.0.0.1:{}", port);
+async fn start_http_server(store: AnyLogStore, bind_address: &str, port: u16) -> Result<()> {
+    let addr = format!("{}:{}", bind_address, port);
     let ct = CancellationToken::new();
 
     let config = StreamableHttpServerConfig {
