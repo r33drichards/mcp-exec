@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
 }
 
 async fn start_http_server(store: AnyLogStore, port: u16) -> Result<()> {
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("127.0.0.1:{}", port);
     let ct = CancellationToken::new();
 
     let config = StreamableHttpServerConfig {
