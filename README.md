@@ -42,10 +42,10 @@ Run mcp-exec using the pre-built Docker image:
 # Run with in-memory storage (stdio transport)
 docker run -i wholelottahoopla/mcp-exec
 
-# Run with file-based storage and volume mount
+# Run with file-based storage and volume mount (for testing)
 docker run -i -v /tmp/mcp-exec-logs:/logs wholelottahoopla/mcp-exec --directory-path /logs
 
-# Run with HTTP transport on port 8080
+# Run with HTTP transport on port 8080 (with persistent storage)
 docker run -d -p 8080:8080 -v /var/lib/mcp-exec:/logs wholelottahoopla/mcp-exec --http-port 8080 --bind-address 0.0.0.0 --directory-path /logs
 ```
 
@@ -66,6 +66,8 @@ services:
 volumes:
   mcp-exec-logs:
 ```
+
+> **Note:** The Docker Compose example binds to `0.0.0.0` for network access. For localhost-only access, change `--bind-address` to `127.0.0.1`.
 
 **Connecting to containerized MCP server:**
 
