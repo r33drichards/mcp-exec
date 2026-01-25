@@ -34,6 +34,88 @@ nix build
 ./result/bin/mcp-exec --help
 ```
 
+### Using Docker
+
+Pre-built Docker images are available on Docker Hub at `wholelottahoopla/mcp-exec` for both amd64 and arm64 architectures.
+
+**Pull the image:**
+
+```bash
+docker pull wholelottahoopla/mcp-exec:latest
+```
+
+**Run with HTTP transport (recommended for Docker):**
+
+```bash
+# Basic run with HTTP on port 8080
+docker run -d \
+  --name mcp-exec \
+  -p 8080:8080 \
+  -v mcp-exec-data:/data \
+  wholelottahoopla/mcp-exec:latest \
+  --http-port 8080 \
+  --bind-address 0.0.0.0 \
+  --directory-path /data
+
+# Connect to http://localhost:8080/mcp
+```
+
+**Run with custom port and volume:**
+
+```bash
+docker run -d \
+  --name mcp-exec \
+  -p 19222:19222 \
+  -v /path/to/logs:/var/lib/mcp-exec \
+  wholelottahoopla/mcp-exec:latest \
+  --http-port 19222 \
+  --bind-address 0.0.0.0 \
+  --directory-path /var/lib/mcp-exec
+```
+
+**Using Docker Compose:**
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3.8'
+
+services:
+  mcp-exec:
+    image: wholelottahoopla/mcp-exec:latest
+    container_name: mcp-exec
+    ports:
+      - "8080:8080"
+    volumes:
+      - mcp-exec-data:/data
+    command: >
+      --http-port 8080
+      --bind-address 0.0.0.0
+      --directory-path /data
+    restart: unless-stopped
+
+volumes:
+  mcp-exec-data:
+```
+
+Then start the service:
+
+```bash
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop service
+docker compose down
+```
+
+**Notes:**
+- Docker deployments must use HTTP transport (stdio transport is not compatible with Docker)
+- Use `--bind-address 0.0.0.0` to allow connections from outside the container
+- Use volume mounts to persist command logs across container restarts
+- The MCP endpoint is available at `http://localhost:<port>/mcp`
+
 ## Usage
 
 ### Stdio Transport (default)
