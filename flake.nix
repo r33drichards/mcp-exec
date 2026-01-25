@@ -17,7 +17,7 @@
         packages.default = mcp-exec;
 
         packages.docker = pkgs.dockerTools.buildLayeredImage {
-          name = "wholelottahoople/mcp-exec";
+          name = "wholelottahoopla/mcp-exec";
           tag = "latest";
           contents = [
             mcp-exec

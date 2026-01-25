@@ -35,7 +35,7 @@ jobs:
         run: |
           nix-shell -p skopeo --run "skopeo copy \
             docker-archive:./result \
-            docker://wholelottahoople/mcp-exec:${{ github.sha }} \
+            docker://wholelottahoopla/mcp-exec:${{ github.sha }} \
             --dest-creds \"\$DOCKER_USERNAME:\$DOCKER_PASSWORD\""
 
       - name: Push Docker Image with Latest Tag
@@ -46,5 +46,5 @@ jobs:
         run: |
           nix-shell -p skopeo --run "skopeo copy \
             docker-archive:./result \
-            docker://wholelottahoople/mcp-exec:latest \
+            docker://wholelottahoopla/mcp-exec:latest \
             --dest-creds \"\$DOCKER_USERNAME:\$DOCKER_PASSWORD\""
