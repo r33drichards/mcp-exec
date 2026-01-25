@@ -72,13 +72,13 @@ volumes:
 For stdio transport:
 ```bash
 # In your MCP client configuration, use:
-docker run -i wholelottahoopla/mcp-exec --directory-path /logs
+docker run -i wholelottahoopla/mcp-exec
 ```
 
 For HTTP transport:
 ```bash
-# Start the container
-docker run -d -p 8080:8080 wholelottahoopla/mcp-exec --http-port 8080 --bind-address 0.0.0.0
+# Start the container with persistent storage
+docker run -d -p 8080:8080 -v /var/lib/mcp-exec:/logs wholelottahoopla/mcp-exec --http-port 8080 --bind-address 0.0.0.0 --directory-path /logs
 
 # Connect your MCP client to http://localhost:8080/mcp
 ```
