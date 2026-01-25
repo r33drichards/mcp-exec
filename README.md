@@ -34,6 +34,55 @@ nix build
 ./result/bin/mcp-exec --help
 ```
 
+### Using Docker
+
+Run mcp-exec using the pre-built Docker image:
+
+```bash
+# Run with in-memory storage (stdio transport)
+docker run -i wholelottahoopla/mcp-exec
+
+# Run with file-based storage and volume mount
+docker run -i -v /tmp/mcp-exec-logs:/logs wholelottahoopla/mcp-exec --directory-path /logs
+
+# Run with HTTP transport on port 8080
+docker run -d -p 8080:8080 -v /var/lib/mcp-exec:/logs wholelottahoopla/mcp-exec --http-port 8080 --bind-address 0.0.0.0 --directory-path /logs
+```
+
+**Docker Compose example:**
+
+```yaml
+version: '3.8'
+services:
+  mcp-exec:
+    image: wholelottahoopla/mcp-exec:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - mcp-exec-logs:/logs
+    command: ["--http-port", "8080", "--bind-address", "0.0.0.0", "--directory-path", "/logs"]
+    restart: unless-stopped
+
+volumes:
+  mcp-exec-logs:
+```
+
+**Connecting to containerized MCP server:**
+
+For stdio transport:
+```bash
+# In your MCP client configuration, use:
+docker run -i wholelottahoopla/mcp-exec --directory-path /logs
+```
+
+For HTTP transport:
+```bash
+# Start the container
+docker run -d -p 8080:8080 wholelottahoopla/mcp-exec --http-port 8080 --bind-address 0.0.0.0
+
+# Connect your MCP client to http://localhost:8080/mcp
+```
+
 ## Usage
 
 ### Stdio Transport (default)

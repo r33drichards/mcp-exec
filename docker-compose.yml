@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  mcp-exec:
+    image: wholelottahoopla/mcp-exec:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - mcp-exec-logs:/logs
+    command: ["--http-port", "8080", "--bind-address", "0.0.0.0", "--directory-path", "/logs"]
+    restart: unless-stopped
+
+volumes:
+  mcp-exec-logs:
