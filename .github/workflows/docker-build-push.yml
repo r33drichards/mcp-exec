@@ -1,0 +1,50 @@
+name: Docker Build and Push
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Build Docker Image
+        run: |
+          nix build .#docker --print-build-logs
+          ls -la result
+
+      - name: Push Docker Image with Commit SHA
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          nix-shell -p skopeo --run "skopeo copy \
+            docker-archive:./result \
+            docker://wholelottahoople/mcp-exec:${{ github.sha }} \
+            --dest-creds \"\$DOCKER_USERNAME:\$DOCKER_PASSWORD\""
+
+      - name: Push Docker Image with Latest Tag
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          nix-shell -p skopeo --run "skopeo copy \
+            docker-archive:./result \
+            docker://wholelottahoople/mcp-exec:latest \
+            --dest-creds \"\$DOCKER_USERNAME:\$DOCKER_PASSWORD\""
