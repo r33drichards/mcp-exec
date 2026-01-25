@@ -12,8 +12,30 @@
     (flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
       let
         pkgs = import nixpkgs { inherit system; };
+        mcp-exec = pkgs.callPackage ./nix/package.nix { };
       in {
-        packages.default = pkgs.callPackage ./nix/package.nix { };
+        packages.default = mcp-exec;
+
+        packages.docker = pkgs.dockerTools.buildLayeredImage {
+          name = "wholelottahoopla/mcp-exec";
+          tag = "latest";
+          contents = [
+            mcp-exec
+            pkgs.bashInteractive
+            pkgs.coreutils
+            pkgs.inetutils
+          ];
+          config = {
+            Cmd = [ "${mcp-exec}/bin/mcp-exec" ];
+            ExposedPorts = {
+              "8080/tcp" = {};
+            };
+            Env = [
+              "PATH=/bin:${mcp-exec}/bin:${pkgs.bashInteractive}/bin:${pkgs.coreutils}/bin:${pkgs.inetutils}/bin"
+            ];
+          };
+        };
+
         devShells.default = import ./shell.nix { inherit pkgs; };
 
         checks = {
