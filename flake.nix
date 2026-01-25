@@ -26,7 +26,7 @@
             pkgs.inetutils
           ];
           config = {
-            Cmd = [ "${mcp-exec}/bin/mcp-exec" ];
+            Entrypoint = [ "${mcp-exec}/bin/mcp-exec" ];
             ExposedPorts = {
               "8080/tcp" = {};
             };
