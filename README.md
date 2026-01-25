@@ -78,8 +78,6 @@ docker run -d \
 Create a `docker-compose.yml` file:
 
 ```yaml
-version: '3.8'
-
 services:
   mcp-exec:
     image: wholelottahoopla/mcp-exec:latest
@@ -101,7 +99,11 @@ volumes:
 Then start the service:
 
 ```bash
+# Docker Compose V2 (recommended)
 docker compose up -d
+
+# Docker Compose V1 (legacy)
+docker-compose up -d
 
 # View logs
 docker compose logs -f
