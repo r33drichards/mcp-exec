@@ -74,11 +74,10 @@ async fn start_http_server(store: AnyLogStore, bind_address: &str, port: u16) ->
     let addr = format!("{}:{}", bind_address, port);
     let ct = CancellationToken::new();
 
-    let config = StreamableHttpServerConfig {
-        sse_keep_alive: Some(std::time::Duration::from_secs(15)),
-        stateful_mode: true,
-        cancellation_token: ct.clone(),
-    };
+    let mut config = StreamableHttpServerConfig::default();
+    config.sse_keep_alive = Some(std::time::Duration::from_secs(15));
+    config.stateful_mode = true;
+    config.cancellation_token = ct.clone();
 
     let session_manager = Arc::new(LocalSessionManager::default());
 

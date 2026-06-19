@@ -7,6 +7,7 @@ pub enum ExecutionStatus {
     Completed(i32),
     Failed(String),
     Timeout,
+    Cancelled,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -13,6 +13,8 @@ pub trait LogStore: Send + Sync + Clone + 'static {
     async fn search(&self, id: Uuid, pattern: &str) -> Result<Vec<LogMatch>, String>;
     async fn get_status(&self, id: Uuid) -> Result<ExecutionStatus, String>;
     async fn set_status(&self, id: Uuid, status: ExecutionStatus) -> Result<(), String>;
+    /// List all known executions with their current status.
+    async fn list_executions(&self) -> Result<Vec<(Uuid, ExecutionStatus)>, String>;
 }
 
 #[derive(Clone)]
@@ -62,6 +64,13 @@ impl LogStore for AnyLogStore {
         match self {
             AnyLogStore::Memory(s) => s.set_status(id, status).await,
             AnyLogStore::File(s) => s.set_status(id, status).await,
+        }
+    }
+
+    async fn list_executions(&self) -> Result<Vec<(Uuid, ExecutionStatus)>, String> {
+        match self {
+            AnyLogStore::Memory(s) => s.list_executions().await,
+            AnyLogStore::File(s) => s.list_executions().await,
         }
     }
 }
