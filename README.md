@@ -53,12 +53,12 @@ nix build
 
 ### Using Docker
 
-Pre-built Docker images are available on Docker Hub at `wholelottahoopla/mcp-exec` for both amd64 and arm64 architectures.
+Pre-built Docker images are published to the [GitHub Container Registry](https://github.com/r33drichards/mcp-exec/pkgs/container/mcp-exec) at `ghcr.io/r33drichards/mcp-exec` for both amd64 and arm64 architectures.
 
 **Pull the image:**
 
 ```bash
-docker pull wholelottahoopla/mcp-exec:latest
+docker pull ghcr.io/r33drichards/mcp-exec:latest
 ```
 
 **Run with HTTP transport (recommended for Docker):**
@@ -69,7 +69,7 @@ docker run -d \
   --name mcp-exec \
   -p 8080:8080 \
   -v mcp-exec-data:/data \
-  wholelottahoopla/mcp-exec:latest \
+  ghcr.io/r33drichards/mcp-exec:latest \
   --http-port 8080 \
   --bind-address 0.0.0.0 \
   --directory-path /data
@@ -84,7 +84,7 @@ docker run -d \
   --name mcp-exec \
   -p 19222:19222 \
   -v /path/to/logs:/var/lib/mcp-exec \
-  wholelottahoopla/mcp-exec:latest \
+  ghcr.io/r33drichards/mcp-exec:latest \
   --http-port 19222 \
   --bind-address 0.0.0.0 \
   --directory-path /var/lib/mcp-exec
@@ -97,7 +97,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   mcp-exec:
-    image: wholelottahoopla/mcp-exec:latest
+    image: ghcr.io/r33drichards/mcp-exec:latest
     container_name: mcp-exec
     ports:
       - "8080:8080"
