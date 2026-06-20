@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [master, main]
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
 jobs:
   build:
     name: Build Docker Image (${{ matrix.arch }})
@@ -37,15 +44,14 @@ jobs:
           nix build .#docker --print-build-logs
           ls -la result
 
-      - name: Push Docker Image with Arch Tag
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Load, tag and push arch image
         run: |
-          nix-shell -p skopeo --run "skopeo copy \
-            docker-archive:./result \
-            docker://wholelottahoopla/mcp-exec:${{ github.sha }}-${{ matrix.arch }} \
-            --dest-creds \"\$DOCKER_USERNAME:\$DOCKER_PASSWORD\""
+          docker load -i result
+          docker tag wholelottahoopla/mcp-exec:latest "$IMAGE:${{ github.sha }}-${{ matrix.arch }}"
+          docker push "$IMAGE:${{ github.sha }}-${{ matrix.arch }}"
 
   manifest:
     name: Create and Push Multi-Arch Manifest
@@ -53,35 +59,31 @@ jobs:
     needs: build
 
     steps:
-      - name: Login to Docker Hub
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-        run: |
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Create and Push Manifest with Commit SHA
         run: |
-          docker manifest create wholelottahoopla/mcp-exec:${{ github.sha }} \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-amd64 \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-arm64
-          docker manifest annotate wholelottahoopla/mcp-exec:${{ github.sha }} \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-amd64 --os linux --arch amd64
-          docker manifest annotate wholelottahoopla/mcp-exec:${{ github.sha }} \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-arm64 --os linux --arch arm64
-          docker manifest push wholelottahoopla/mcp-exec:${{ github.sha }}
+          docker manifest create "$IMAGE:${{ github.sha }}" \
+            "$IMAGE:${{ github.sha }}-amd64" \
+            "$IMAGE:${{ github.sha }}-arm64"
+          docker manifest annotate "$IMAGE:${{ github.sha }}" \
+            "$IMAGE:${{ github.sha }}-amd64" --os linux --arch amd64
+          docker manifest annotate "$IMAGE:${{ github.sha }}" \
+            "$IMAGE:${{ github.sha }}-arm64" --os linux --arch arm64
+          docker manifest push "$IMAGE:${{ github.sha }}"
 
       - name: Create and Push Latest Manifest
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          docker manifest create wholelottahoopla/mcp-exec:latest \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-amd64 \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-arm64
-          docker manifest annotate wholelottahoopla/mcp-exec:latest \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-amd64 --os linux --arch amd64
-          docker manifest annotate wholelottahoopla/mcp-exec:latest \
-            wholelottahoopla/mcp-exec:${{ github.sha }}-arm64 --os linux --arch arm64
-          docker manifest push wholelottahoopla/mcp-exec:latest
+          docker manifest create "$IMAGE:latest" \
+            "$IMAGE:${{ github.sha }}-amd64" \
+            "$IMAGE:${{ github.sha }}-arm64"
+          docker manifest annotate "$IMAGE:latest" \
+            "$IMAGE:${{ github.sha }}-amd64" --os linux --arch amd64
+          docker manifest annotate "$IMAGE:latest" \
+            "$IMAGE:${{ github.sha }}-arm64" --os linux --arch arm64
+          docker manifest push "$IMAGE:latest"
 
   comment:
     name: Comment Docker Tags on PR
@@ -112,13 +114,13 @@ jobs:
 
             **Multi-arch image (recommended):**
             ```bash
-            docker pull wholelottahoopla/mcp-exec:${{ github.sha }}
+            docker pull ${{ env.IMAGE }}:${{ github.sha }}
             ```
 
             **Run with HTTP server:**
             ```bash
             docker run -d -p 8080:8080 -v /var/lib/mcp-exec:/logs \
-              wholelottahoopla/mcp-exec:${{ github.sha }} \
+              ${{ env.IMAGE }}:${{ github.sha }} \
               --http-port 8080 --bind-address 0.0.0.0 --directory-path /logs
             ```
 
@@ -127,12 +129,12 @@ jobs:
 
             **AMD64:**
             ```bash
-            docker pull wholelottahoopla/mcp-exec:${{ github.sha }}-amd64
+            docker pull ${{ env.IMAGE }}:${{ github.sha }}-amd64
             ```
 
             **ARM64:**
             ```bash
-            docker pull wholelottahoopla/mcp-exec:${{ github.sha }}-arm64
+            docker pull ${{ env.IMAGE }}:${{ github.sha }}-arm64
             ```
             </details>
 

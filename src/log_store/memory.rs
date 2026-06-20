@@ -96,4 +96,12 @@ impl LogStore for InMemoryLogStore {
         exec.status = status;
         Ok(())
     }
+
+    async fn list_executions(&self) -> Result<Vec<(Uuid, ExecutionStatus)>, String> {
+        let data = self.data.read().await;
+        Ok(data
+            .iter()
+            .map(|(id, exec)| (*id, exec.status.clone()))
+            .collect())
+    }
 }

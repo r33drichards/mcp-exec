@@ -126,4 +126,27 @@ impl LogStore for FileLogStore {
         std::fs::write(&path, content).map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    async fn list_executions(&self) -> Result<Vec<(Uuid, ExecutionStatus)>, String> {
+        let entries = std::fs::read_dir(&self.dir)
+            .map_err(|e| format!("Failed to read storage directory: {}", e))?;
+
+        let mut executions = Vec::new();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("status") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Ok(id) = Uuid::parse_str(stem) else {
+                continue;
+            };
+            if let Ok(status) = self.get_status(id).await {
+                executions.push((id, status));
+            }
+        }
+        Ok(executions)
+    }
 }

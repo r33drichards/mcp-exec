@@ -7,6 +7,7 @@ A Rust-based [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) se
 - **Async command execution** - Commands run in the background, returning immediately with a UUID for tracking
 - **Log streaming** - Retrieve output with byte offset pagination for efficient large log handling
 - **Log searching** - Regex-based search across command output
+- **MCP Tasks support** - Implements the [Tasks extension (SEP-1686)](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks); task-capable clients can run `exec` as a task and poll/await/cancel it via the standard `tasks/*` methods
 - **Dual transport** - Supports both stdio and streamable HTTP transports
 - **Flexible storage** - In-memory or file-based log persistence
 - **NixOS module** - First-class NixOS/systemd integration
@@ -15,9 +16,25 @@ A Rust-based [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) se
 
 | Tool | Description |
 |------|-------------|
-| `exec` | Execute a shell command asynchronously. Returns a UUID to track execution. |
+| `exec` | Execute a shell command asynchronously. Returns a UUID to track execution. Task-capable (`execution.taskSupport: "optional"`). |
 | `stream_logs` | Stream logs from an execution with byte offset pagination. |
 | `search_logs` | Search logs using regex patterns. Returns matching lines with offsets. |
+
+## MCP Tasks
+
+The server advertises the [`tasks` capability](https://modelcontextprotocol.io/specification/2025-11-25/basic/utilities/tasks) (`tasks.list`, `tasks.cancel`, and `tasks.requests.tools.call`). Clients that support tasks may augment a `tools/call` to `exec` with a `task` object, in which case the task tracks the command's full lifecycle rather than returning immediately:
+
+| Method | Behavior |
+|--------|----------|
+| `tools/call` (with `task`) | Spawns the command and returns a `CreateTaskResult`. The task id is the execution UUID, so it also works with `stream_logs`/`search_logs`. |
+| `tasks/get` | Returns the task's current status (`working` → `completed`/`failed`/`cancelled`). |
+| `tasks/result` | Blocks until the command finishes, then returns its full output as a `CallToolResult`. |
+| `tasks/cancel` | Kills the running command and marks the task `cancelled`. |
+| `tasks/list` | Lists all known executions as tasks. |
+
+Status mapping: a finished command is `completed` (its exit code is included in the result text), while timeouts and spawn failures map to `failed`. Clients that do not support tasks can keep using the original `exec` → `stream_logs`/`search_logs` flow unchanged.
+
+> **Note on task isolation:** task ids are random UUIDs and the server does not bind them to an authorization context, so any requestor that knows a task id can read or cancel it. This matches the single-user/local design of the server; do not expose it untrusted on a shared network.
 
 ## Installation
 
@@ -36,12 +53,12 @@ nix build
 
 ### Using Docker
 
-Pre-built Docker images are available on Docker Hub at `wholelottahoopla/mcp-exec` for both amd64 and arm64 architectures.
+Pre-built Docker images are published to the [GitHub Container Registry](https://github.com/r33drichards/mcp-exec/pkgs/container/mcp-exec) at `ghcr.io/r33drichards/mcp-exec` for both amd64 and arm64 architectures.
 
 **Pull the image:**
 
 ```bash
-docker pull wholelottahoopla/mcp-exec:latest
+docker pull ghcr.io/r33drichards/mcp-exec:latest
 ```
 
 **Run with HTTP transport (recommended for Docker):**
@@ -52,7 +69,7 @@ docker run -d \
   --name mcp-exec \
   -p 8080:8080 \
   -v mcp-exec-data:/data \
-  wholelottahoopla/mcp-exec:latest \
+  ghcr.io/r33drichards/mcp-exec:latest \
   --http-port 8080 \
   --bind-address 0.0.0.0 \
   --directory-path /data
@@ -67,7 +84,7 @@ docker run -d \
   --name mcp-exec \
   -p 19222:19222 \
   -v /path/to/logs:/var/lib/mcp-exec \
-  wholelottahoopla/mcp-exec:latest \
+  ghcr.io/r33drichards/mcp-exec:latest \
   --http-port 19222 \
   --bind-address 0.0.0.0 \
   --directory-path /var/lib/mcp-exec
@@ -80,7 +97,7 @@ Create a `docker-compose.yml` file:
 ```yaml
 services:
   mcp-exec:
-    image: wholelottahoopla/mcp-exec:latest
+    image: ghcr.io/r33drichards/mcp-exec:latest
     container_name: mcp-exec
     ports:
       - "8080:8080"

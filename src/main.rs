@@ -74,10 +74,27 @@ async fn start_http_server(store: AnyLogStore, bind_address: &str, port: u16) ->
     let addr = format!("{}:{}", bind_address, port);
     let ct = CancellationToken::new();
 
-    let config = StreamableHttpServerConfig {
-        sse_keep_alive: Some(std::time::Duration::from_secs(15)),
-        stateful_mode: true,
-        cancellation_token: ct.clone(),
+    let mut config = StreamableHttpServerConfig::default();
+    config.sse_keep_alive = Some(std::time::Duration::from_secs(15));
+    config.stateful_mode = true;
+    config.cancellation_token = ct.clone();
+
+    // rmcp 1.7 enables loopback-only Host validation (DNS-rebinding protection) by
+    // default. When the operator binds to a non-loopback address they intend to serve
+    // clients that reach the server by hostnames we can't enumerate, so relax the check
+    // there; keep the protection for the default loopback bind.
+    let bind_is_loopback = bind_address
+        .parse::<std::net::IpAddr>()
+        .map(|ip| ip.is_loopback())
+        .unwrap_or(false);
+    let config = if bind_is_loopback {
+        config
+    } else {
+        tracing::warn!(
+            "Binding to non-loopback address {}; disabling Host validation (DNS-rebinding protection)",
+            bind_address
+        );
+        config.disable_allowed_hosts()
     };
 
     let session_manager = Arc::new(LocalSessionManager::default());
