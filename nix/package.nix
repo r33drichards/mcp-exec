@@ -12,9 +12,6 @@ rustPlatform.buildRustPackage {
 
   cargoLock = {
     lockFile = ../Cargo.lock;
-    outputHashes = {
-      "rmcp-0.12.0" = "sha256-GaZGW3I95DJnkoQrmehtqFGEP0xibnqXyapby2LFtok=";
-    };
   };
 
   nativeBuildInputs = [ pkg-config ];
