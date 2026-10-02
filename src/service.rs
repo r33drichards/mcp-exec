@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::time::Duration;
 
 use rmcp::{
@@ -16,7 +17,7 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::executor::{new_task_registry, spawn_command, TaskRegistry};
+use crate::executor::{new_task_registry, spawn_command, CommandSpec, TaskRegistry};
 use crate::log_store::{AnyLogStore, LogStore};
 use crate::types::{ExecutionStatus, LogMatch};
 
@@ -33,12 +34,56 @@ pub struct ExecService {
 }
 
 // Request types for tool parameters
+//
+// `exec` takes a program and its arguments, not a command line: nothing here is
+// given to a shell. Unknown fields are refused, so a request in the old form
+// (`cmd`) fails with an error that names the fields that exist.
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ExecRequest {
-    #[schemars(description = "The shell command to execute")]
-    pub cmd: String,
-    #[schemars(description = "Timeout in seconds")]
+    #[schemars(description = "The program to run: a name looked up on PATH, or a path. Executed directly, not by a shell")]
+    pub bin: String,
+    #[serde(default)]
+    #[schemars(description = "The program's arguments, passed as they are: no word splitting, globbing or expansion (default: none)")]
+    pub args: Vec<String>,
+    #[schemars(description = "Timeout in seconds; then the program and everything it started are killed")]
     pub timeout: u64,
+    #[serde(default)]
+    #[schemars(description = "Working directory: an absolute path (default: the server's working directory)")]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Environment variables to add to the server's environment")]
+    pub env: Option<BTreeMap<String, String>>,
+}
+
+impl ExecRequest {
+    /// Check the request and turn it into what the executor runs.
+    fn into_spec(self) -> Result<CommandSpec, String> {
+        if self.bin.is_empty() {
+            return Err("bin must not be empty".to_string());
+        }
+        if self.bin.contains('\0') || self.args.iter().any(|a| a.contains('\0')) {
+            return Err("bin and args must not contain NUL characters".to_string());
+        }
+        if let Some(cwd) = &self.cwd {
+            if !std::path::Path::new(cwd).is_absolute() || cwd.contains('\0') {
+                return Err(format!("cwd must be an absolute path: {:?}", cwd));
+            }
+            if !std::path::Path::new(cwd).is_dir() {
+                return Err(format!("cwd is not a directory: {:?}", cwd));
+            }
+        }
+        let env = self.env.unwrap_or_default();
+        for (name, value) in &env {
+            if name.is_empty() || name.contains('=') || name.contains('\0') {
+                return Err(format!("env: {:?} is not a variable name", name));
+            }
+            if value.contains('\0') {
+                return Err(format!("env: the value of {} must not contain NUL characters", name));
+            }
+        }
+        Ok(CommandSpec { bin: self.bin, args: self.args, cwd: self.cwd, env })
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
@@ -55,6 +100,12 @@ pub struct SearchLogsRequest {
     pub id: String,
     #[schemars(description = "Regex pattern to search for")]
     pub pattern: String,
+}
+
+#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+pub struct KillRequest {
+    #[schemars(description = "The execution UUID")]
+    pub id: String,
 }
 
 // Response types
@@ -124,35 +175,76 @@ impl ExecService {
     }
 
     /// Create the execution record, register a cancellation token, and spawn the command.
-    async fn start_execution(&self, id: Uuid, cmd: String, timeout_secs: u64) -> Result<(), String> {
-        self.store.create(id, cmd.clone()).await?;
+    async fn start_execution(&self, id: Uuid, spec: CommandSpec, timeout_secs: u64) -> Result<(), String> {
+        // What is kept about the command: the program and its arguments, as JSON.
+        let described = serde_json::json!({ "bin": spec.bin, "args": spec.args, "cwd": spec.cwd }).to_string();
+        self.store.create(id, described).await?;
         let cancel = tokio_util::sync::CancellationToken::new();
         self.tasks.lock().await.insert(id, cancel.clone());
-        let _ = spawn_command(self.store.clone(), self.tasks.clone(), cancel, id, cmd, timeout_secs);
+        let _ = spawn_command(self.store.clone(), self.tasks.clone(), cancel, id, spec, timeout_secs);
         Ok(())
     }
 
-    /// Execute a shell command asynchronously. Returns immediately with a UUID to track the execution.
+    /// How many commands are running (registered and not yet ended).
+    #[cfg(test)]
+    pub async fn running(&self) -> usize {
+        self.tasks.lock().await.len()
+    }
+
+    /// Stop a running execution: cancel it and record the terminal status at once, so that
+    /// it stays cancelled even if the command races to completion.
+    async fn cancel_execution(&self, id: Uuid) {
+        if let Some(token) = self.tasks.lock().await.get(&id) {
+            token.cancel();
+        }
+        let _ = self.store.set_status(id, ExecutionStatus::Cancelled).await;
+    }
+
+    /// Run a program asynchronously. Returns immediately with a UUID to track the execution.
     #[tool(
-        description = "Execute a shell command asynchronously. Returns a UUID to track execution. Use stream_logs to get output. Task-capable clients may invoke this as a task (tasks/get, tasks/result, tasks/cancel).",
+        description = "Run a program asynchronously: `bin` with the arguments `args`, executed directly (no shell: no pipes, globbing or variable expansion; for those run bin \"sh\" with args [\"-c\", \"...\"]). Optional `cwd` and `env`. Returns a UUID to track execution. Use stream_logs to get output and kill to stop it. Task-capable clients may invoke this as a task (tasks/get, tasks/result, tasks/cancel). The `cmd` field of earlier versions no longer exists.",
         execution(task_support = "optional")
     )]
-    pub async fn exec(&self, Parameters(req): Parameters<ExecRequest>) -> String {
+    pub async fn exec(&self, Parameters(req): Parameters<ExecRequest>) -> Result<String, McpError> {
         let id = Uuid::new_v4();
+        let timeout = req.timeout;
+        let spec = req.into_spec().map_err(|e| McpError::invalid_params(e, None))?;
 
-        if let Err(e) = self.start_execution(id, req.cmd, req.timeout).await {
-            return serde_json::to_string(&ExecResponse {
+        if let Err(e) = self.start_execution(id, spec, timeout).await {
+            return Ok(serde_json::to_string(&ExecResponse {
                 id: id.to_string(),
                 status: format!("error: {}", e),
             })
-            .unwrap_or_else(|_| format!("{{\"id\":\"{}\",\"status\":\"error\"}}", id));
+            .unwrap_or_else(|_| format!("{{\"id\":\"{}\",\"status\":\"error\"}}", id)));
         }
 
-        serde_json::to_string(&ExecResponse {
+        Ok(serde_json::to_string(&ExecResponse {
             id: id.to_string(),
             status: "started".to_string(),
         })
-        .unwrap_or_else(|_| format!("{{\"id\":\"{}\",\"status\":\"started\"}}", id))
+        .unwrap_or_else(|_| format!("{{\"id\":\"{}\",\"status\":\"started\"}}", id)))
+    }
+
+    /// Stop a running execution, with everything it started.
+    #[tool(description = "Stop a running execution: the program and everything it started are killed and its status becomes \"cancelled\". Returns the execution's status; an execution that had already ended keeps the status it had.")]
+    pub async fn kill(&self, Parameters(req): Parameters<KillRequest>) -> String {
+        let respond = |status: String| {
+            serde_json::to_string(&ExecResponse { id: req.id.clone(), status })
+                .unwrap_or_else(|_| "{\"status\":\"error\"}".to_string())
+        };
+        let uuid = match Uuid::parse_str(&req.id) {
+            Ok(u) => u,
+            Err(e) => return respond(format!("error: Invalid UUID: {}", e)),
+        };
+        let status = match self.store.get_status(uuid).await {
+            Ok(s) => s,
+            Err(e) => return respond(format!("error: {}", e)),
+        };
+        if is_terminal(&status) {
+            return respond(status_to_string(&status));
+        }
+        self.cancel_execution(uuid).await;
+        respond(status_to_string(&ExecutionStatus::Cancelled))
     }
 
     /// Stream logs from an execution starting at the given byte offset.
@@ -220,9 +312,11 @@ impl ServerHandler for ExecService {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::default();
         info.instructions = Some(
-            "Shell command execution service with log streaming and search. Supports MCP \
-             tasks (SEP-1686): the `exec` tool may be invoked as a task, with the task \
-             tracking the command's lifecycle (tasks/get, tasks/result, tasks/cancel)."
+            "Command execution service with log streaming and search: `exec` runs a program \
+             with arguments (no shell), `stream_logs` and `search_logs` read its output, \
+             `kill` stops it. Supports MCP tasks (SEP-1686): the `exec` tool may be invoked \
+             as a task, with the task tracking the command's lifecycle (tasks/get, \
+             tasks/result, tasks/cancel)."
                 .into(),
         );
         info.capabilities = ServerCapabilities::builder()
@@ -252,7 +346,9 @@ impl ServerHandler for ExecService {
             .map_err(|e| McpError::invalid_params(format!("invalid exec arguments: {}", e), None))?;
 
         let id = Uuid::new_v4();
-        self.start_execution(id, req.cmd, req.timeout)
+        let timeout = req.timeout;
+        let spec = req.into_spec().map_err(|e| McpError::invalid_params(e, None))?;
+        self.start_execution(id, spec, timeout)
             .await
             .map_err(|e| McpError::internal_error(format!("failed to start execution: {}", e), None))?;
 
@@ -354,12 +450,9 @@ impl ServerHandler for ExecService {
             ));
         }
 
-        if let Some(token) = self.tasks.lock().await.get(&id) {
-            token.cancel();
-        }
-        // Enforce the terminal cancelled state immediately, per spec a cancelled task must
+        // Enforces the terminal cancelled state immediately: per spec a cancelled task must
         // remain cancelled even if execution races to completion.
-        let _ = self.store.set_status(id, ExecutionStatus::Cancelled).await;
+        self.cancel_execution(id).await;
 
         let now = current_timestamp();
         let task = Task::new(id.to_string(), TaskStatus::Cancelled, now.clone(), now)
