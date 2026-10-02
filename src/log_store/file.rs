@@ -92,8 +92,9 @@ impl LogStore for FileLogStore {
 
     async fn search(&self, id: Uuid, pattern: &str) -> Result<Vec<LogMatch>, String> {
         let path = self.log_path(id);
-        let content = std::fs::read_to_string(&path)
+        let bytes = std::fs::read(&path)
             .map_err(|e| format!("Failed to read log file: {}", e))?;
+        let content = String::from_utf8_lossy(&bytes);
 
         let regex = Regex::new(pattern).map_err(|e| format!("Invalid regex: {}", e))?;
 

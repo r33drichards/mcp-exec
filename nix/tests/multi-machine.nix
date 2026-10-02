@@ -29,7 +29,7 @@ let
 
                 # Execute hostname command
                 result = await session.call_tool("exec", {
-                    "cmd": "hostname",
+                    "bin": "hostname",
                     "timeout": 10
                 })
                 exec_data = json.loads(result.content[0].text)

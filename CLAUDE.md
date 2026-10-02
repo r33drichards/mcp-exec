@@ -46,8 +46,8 @@ LogStore Trait (log_store/mod.rs)
 
 **Key modules:**
 - `main.rs` - CLI args, transport selection (stdio/HTTP), server bootstrap
-- `service.rs` - MCP tool router with 3 tools (exec, stream_logs, search_logs) plus the MCP Tasks (SEP-1686) handlers (enqueue_task, get_task_info, get_task_result, cancel_task, list_tasks)
-- `executor.rs` - Async command spawning with timeout, cancellation, and stdout/stderr capture; owns the `TaskRegistry` of cancellation tokens
+- `service.rs` - MCP tool router with 4 tools (exec, stream_logs, search_logs, kill); `exec` takes `bin` + `args` (+ `cwd`, `env`) and runs the program directly, never through a shell plus the MCP Tasks (SEP-1686) handlers (enqueue_task, get_task_info, get_task_result, cancel_task, list_tasks)
+- `executor.rs` - Async command spawning (own process group, killed as a group on timeout/cancel) with timeout, cancellation, and byte-wise stdout/stderr capture; owns the `TaskRegistry` of cancellation tokens
 - `log_store/` - Trait-based storage abstraction with memory and file backends
 - `types.rs` - ExecutionStatus, LogMatch, Execution domain types
 
@@ -57,7 +57,7 @@ LogStore Trait (log_store/mod.rs)
 - Stdio (default): Uses rmcp stdio transport for local MCP integration
 - HTTP: Streamable HTTP on configurable port, binds to 127.0.0.1 only
 
-**Data flow:** Client calls exec → UUID created → async task spawns shell command → output streams to LogStore → client can stream_logs from any offset or search_logs with regex
+**Data flow:** Client calls exec → UUID created → async task spawns the program → output streams to LogStore → client can stream_logs from any offset or search_logs with regex
 
 ## Key Patterns
 

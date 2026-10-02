@@ -38,7 +38,8 @@ async def test_mcp_server(url: str) -> dict:
 
                 # Test 3: Execute command
                 exec_result = await session.call_tool("exec", {
-                    "cmd": "echo hello_mcp_test_12345",
+                    "bin": "echo",
+                    "args": ["hello_mcp_test_12345"],
                     "timeout": 10
                 })
                 if exec_result.content:

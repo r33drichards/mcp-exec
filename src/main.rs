@@ -139,8 +139,11 @@ fn build_app(
 
     let session_manager = Arc::new(LocalSessionManager::default());
 
+    // One service, cloned for each session: the sessions share the registry of running
+    // commands, so a command started in one session can be killed from another.
+    let service = ExecService::new(store);
     let http_service = StreamableHttpService::new(
-        move || Ok(ExecService::new(store.clone())),
+        move || Ok(service.clone()),
         session_manager,
         config,
     );
@@ -263,6 +266,44 @@ mod tests {
         assert_eq!(post_initialize(addr, "Sec-Fetch-Site: same-origin\r\n").await, 403);
         assert_eq!(post_initialize(addr, "Sec-Fetch-Mode: cors\r\nSec-Fetch-Dest: empty\r\n").await, 403);
         ct.cancel();
+    }
+
+    /// Every HTTP session gets a clone of one service, so they share the running
+    /// commands: one started through one clone can be killed through another.
+    #[tokio::test]
+    async fn clones_of_the_service_share_running_commands() {
+        use rmcp::handler::server::wrapper::Parameters;
+        use service::{ExecRequest, KillRequest, StreamLogsRequest};
+
+        let first = ExecService::new(AnyLogStore::Memory(InMemoryLogStore::new()));
+        let second = first.clone();
+        let started = first
+            .exec(Parameters(ExecRequest {
+                bin: "sleep".into(),
+                args: vec!["60".into()],
+                timeout: 120,
+                cwd: None,
+                env: None,
+            }))
+            .await
+            .unwrap();
+        let id = serde_json::from_str::<serde_json::Value>(&started).unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        let killed = second.kill(Parameters(KillRequest { id: id.clone() })).await;
+        assert!(killed.contains("cancelled"), "{}", killed);
+        // The command really ended: the executor records it within moments.
+        for _ in 0..100 {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            if first.running().await == 0 {
+                break;
+            }
+        }
+        assert_eq!(first.running().await, 0, "the command is still registered as running");
+        let logs = second.stream_logs(Parameters(StreamLogsRequest { id, offset: 0 })).await;
+        assert!(logs.contains("cancelled"), "{}", logs);
     }
 
     #[tokio::test]

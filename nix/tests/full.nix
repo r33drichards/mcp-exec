@@ -25,7 +25,8 @@ let
 
                 # Execute command
                 result = await session.call_tool("exec", {
-                    "cmd": "echo 'persistence_test_12345'",
+                    "bin": "echo",
+                    "args": ["persistence_test_12345"],
                     "timeout": 10
                 })
                 exec_data = json.loads(result.content[0].text)
@@ -52,7 +53,8 @@ let
 
                 # Test sudo command
                 result = await session.call_tool("exec", {
-                    "cmd": "sudo cat /etc/shadow | head -1",
+                    "bin": "sh",
+                    "args": ["-c", "sudo cat /etc/shadow | head -1"],
                     "timeout": 10
                 })
                 sudo_data = json.loads(result.content[0].text)
