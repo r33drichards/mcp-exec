@@ -160,6 +160,25 @@ mcp-exec --http-port 8080 --directory-path /var/lib/mcp-exec
 mcp-exec --http-port 8080 --bind-address 0.0.0.0 --directory-path /var/lib/mcp-exec
 ```
 
+### Running next to a web browser
+
+The HTTP transport has no authentication. On the default loopback bind, the
+server only answers requests whose `Host` is a loopback name (protection against
+DNS rebinding) and requires `Content-Type: application/json`, which makes a
+browser send a CORS preflight that the server does not answer. If a web browser
+runs on the same machine, or in the same network namespace (a container next to
+it in a pod), add `--reject-browser-requests`: any request carrying an `Origin`
+or `Sec-Fetch-*` header is then answered `403`, so a page open in that browser
+cannot call the server whatever the browser's CORS settings. Browsers set those
+headers themselves and page script cannot remove them; MCP clients send neither.
+
+```bash
+mcp-exec --http-port 8080 --reject-browser-requests
+```
+
+Do not use the flag with a client that itself runs in a browser (for example a
+web-based MCP inspector).
+
 ## Client Integration
 
 ### Claude for Desktop
